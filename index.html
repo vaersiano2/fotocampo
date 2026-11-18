@@ -597,6 +597,111 @@ async function fileToDataUrl(file) {
 }
 
 
+// LECTURA ROBUSTA DE GPS EXIF
+
+function toDecimal(v, ref) {
+
+  if (v == null) return null;
+
+  let d;
+
+  if (Array.isArray(v) || ArrayBuffer.isView(v)) {
+    const [deg = 0, min = 0, sec = 0] = Array.from(v).map(Number);
+    d = deg + min / 60 + sec / 3600;
+  } else {
+    d = Number(v);
+  }
+
+  if (!Number.isFinite(d)) return null;
+
+  if (/^[SW]/i.test(String(ref || ''))) d = -Math.abs(d);
+
+  return d;
+}
+
+function validCoords(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180 &&
+    !(lat === 0 && lon === 0)
+  );
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  if (d instanceof Date && !isNaN(d)) {
+    return d.toLocaleString('es-ES');
+  }
+  return String(d);
+}
+
+async function readPhotoMeta(file) {
+
+  if (typeof exifr === 'undefined') {
+    throw new Error(
+      'La biblioteca EXIF (exifr) no se ha cargado. Revisa tu conexión a Internet.'
+    );
+  }
+
+  // Se lee el archivo una sola vez como ArrayBuffer
+  const buf = await file.arrayBuffer();
+
+  let lat = null;
+  let lon = null;
+  let date = '';
+
+  // 1) Método directo
+  try {
+    const g = await exifr.gps(buf);
+    if (validCoords(g?.latitude, g?.longitude)) {
+      lat = g.latitude;
+      lon = g.longitude;
+    }
+  } catch (err) {
+    console.warn('exifr.gps falló:', file.name, err);
+  }
+
+  // 2) Lectura completa (fecha + respaldo manual de GPS)
+  let all = {};
+
+  try {
+    all = await exifr.parse(buf, {
+      tiff: true,
+      exif: true,
+      gps: true,
+      xmp: true,
+      mergeOutput: true
+    }) || {};
+  } catch (err) {
+    console.warn('exifr.parse falló:', file.name, err);
+  }
+
+  if (lat == null || lon == null) {
+
+    let la = Number(all.latitude);
+    let lo = Number(all.longitude);
+
+    if (!validCoords(la, lo)) {
+      la = toDecimal(all.GPSLatitude, all.GPSLatitudeRef);
+      lo = toDecimal(all.GPSLongitude, all.GPSLongitudeRef);
+    }
+
+    if (validCoords(la, lo)) {
+      lat = la;
+      lon = lo;
+    }
+  }
+
+  date = formatDate(
+    all.DateTimeOriginal || all.CreateDate || all.ModifyDate
+  );
+
+  return { lat, lon, date };
+}
+
+
 // SELECCIONAR FOTOGRAFÍAS
 
 $('photosInput').addEventListener('change',async e => {
@@ -609,47 +714,34 @@ $('photosInput').addEventListener('change',async e => {
 
   let added = 0;
   let errors = 0;
+  let noGps = 0;
+  let libError = '';
 
   for (const file of files) {
 
     try {
 
-      let gps = null;
-      let exif = {};
+      let meta = { lat:null, lon:null, date:'' };
 
       try {
-
-        gps = await exifr.gps(file);
-
-        exif = await exifr.parse(
-          file,
-          ['DateTimeOriginal','CreateDate']
-        ) || {};
-
-      } catch(err) {
-        console.warn('No se pudieron leer los EXIF:',file.name,err);
+        meta = await readPhotoMeta(file);
+      } catch (err) {
+        console.warn('No se pudieron leer los EXIF:', file.name, err);
+        if (/exifr/i.test(err.message)) libError = err.message;
       }
 
-      const lat = Number.isFinite(gps?.latitude)
-        ? gps.latitude
-        : null;
-
-      const lon = Number.isFinite(gps?.longitude)
-        ? gps.longitude
-        : null;
-
-      const date =
-        exif.DateTimeOriginal ||
-        exif.CreateDate ||
-        '';
+      if (meta.lat == null) {
+        noGps++;
+        console.info('Sin GPS:', file.name);
+      }
 
       const p = {
         name:file.name,
         type:file.type || 'image/jpeg',
         dataUrl:await fileToDataUrl(file),
-        lat,
-        lon,
-        date:String(date || '')
+        lat:meta.lat,
+        lon:meta.lon,
+        date:meta.date
       };
 
       photos.push(p);
@@ -665,15 +757,23 @@ $('photosInput').addEventListener('change',async e => {
 
   refreshPhotos();
 
-  const valid = photos.filter(p =>
-    p.lat != null && p.lon != null
-  );
+  // Colocar automáticamente en el mapa las fotos con GPS
+  loadPhotosOnMap();
 
-  say(
-    `${added} fotografía(s) seleccionada(s). ` +
-    `${valid.length} con GPS. Pulsa "Cargar fotos en el mapa".` +
-    (errors ? ` ${errors} error(es) de lectura.` : '')
-  );
+  let msg =
+    `${added} fotografía(s) añadida(s). ` +
+    `${photos.filter(p => p.marker).length} situadas en el mapa.`;
+
+  if (noGps) {
+    msg += ` ${noGps} sin datos GPS (si las elegiste desde la galería del móvil, ` +
+           `el sistema suele eliminar el GPS: usa "Archivos" o la opción de ` +
+           `"Original/Ubicación").`;
+  }
+
+  if (errors) msg += ` ${errors} error(es) de lectura.`;
+  if (libError) msg = libError;
+
+  say(msg);
 
   e.target.value = '';
 });
@@ -1154,15 +1254,13 @@ $('exportKmz').onclick = async () => {
 
     }).join('');
 
-    const kml = `
-      <?xml version="1.0" encoding="UTF-8"?>
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
       <kml xmlns="http://www.opengis.net/kml/2.2">
         <Document>
           <name>Fotografías GeoPhoto Explorer</name>
           ${placemarks}
         </Document>
-      </kml>
-    `;
+      </kml>`;
 
     zip.file('doc.kml',kml);
 
