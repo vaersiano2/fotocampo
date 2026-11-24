@@ -50,18 +50,18 @@ input[type=file]{display:none}
 }
 </style>
 </head>
- 
+
 <body>
- 
+
 <header>
   <strong>📍 GeoPhoto Explorer</strong>
   <span>Fotografías georreferenciadas · KML · KMZ</span>
 </header>
- 
+
 <div class="app">
- 
+
 <aside>
- 
+
 <section>
   <h2>Fotografías georreferenciadas</h2>
   <label class="upload" for="photosInput">＋ Seleccionar fotografías (JPG, JPEG, TIFF)</label>
@@ -78,7 +78,7 @@ input[type=file]{display:none}
   </div>
   <div id="photoList" class="photo-grid"></div>
 </section>
- 
+
 <section>
   <h2>Capas KML / KMZ</h2>
   <label class="upload" for="kmlInput">＋ Añadir archivos KML o KMZ</label>
@@ -93,7 +93,7 @@ input[type=file]{display:none}
     <div class="empty">Todavía no hay capas KML.</div>
   </div>
 </section>
- 
+
 <section>
   <h2>Mapa base</h2>
   <div class="row">
@@ -101,7 +101,7 @@ input[type=file]{display:none}
     <label><input type="radio" name="basemap" value="sat"> Satélite</label>
   </div>
 </section>
- 
+
 <section>
   <h2>Proyecto</h2>
   <div class="actions">
@@ -118,63 +118,63 @@ input[type=file]{display:none}
     cargadas. Para recuperarlo, usa “Abrir proyecto”.
   </p>
 </section>
- 
+
 <div id="status" role="status"></div>
- 
+
 <div class="small">
   Requiere conexión a Internet para cargar los mapas y las bibliotecas
   externas. Los archivos se procesan localmente; no se envían a un servidor.
 </div>
- 
+
 </aside>
- 
+
 <main id="map" aria-label="Mapa interactivo"></main>
- 
+
 </div>
- 
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
- 
+
 <script>
 (() => {
 'use strict';
- 
+
 const $ = id => document.getElementById(id);
- 
+
 const map = L.map('map').setView([39.47,-0.38],8);
- 
+
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'});
- 
+
 const sat = L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   {maxZoom:19, attribution:'Tiles &copy; Esri'});
- 
+
 osm.addTo(map);
- 
+
 const photoLayer = L.layerGroup().addTo(map);
 const photos = [];
 const kmlLayers = [];
- 
+
 const colors = ['#159447','#2468d7','#d97706','#9333ea','#0891b2','#dc3f67','#64748b'];
 let colorIndex = 0;
- 
+
 const say = msg => $('status').textContent = msg;
- 
+
 const escapeHtml = s =>
   String(s ?? '').replace(/[&<>"']/g,c=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
- 
+
 const fmt = n => Number(n).toFixed(6);
- 
- 
+
+
 // --------------------------------------------------
 // FOTOGRAFÍAS
 // --------------------------------------------------
- 
+
 function photoPopup(p) {
   const img = p.dataUrl ? `<img class="popup-img" src="${p.dataUrl}" alt="">` : '';
   return `${img}
@@ -185,24 +185,24 @@ function photoPopup(p) {
       ${p.date ? `Fecha: ${escapeHtml(p.date)}` : ''}
     </div>`;
 }
- 
+
 function addPhotoMarker(p) {
   if (p.lat == null || p.lon == null ||
       !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
   if (p.marker) return;
- 
+
   const marker = L.marker([p.lat,p.lon]).bindPopup(() => photoPopup(p),{maxWidth:300});
   p.marker = marker;
   marker.addTo(photoLayer);
 }
- 
+
 function loadPhotosOnMap() {
- 
+
   const pending = photos.filter(p =>
     p.lat != null && p.lon != null &&
     Number.isFinite(p.lat) && Number.isFinite(p.lon) && !p.marker
   );
- 
+
   if (!pending.length) {
     const withGps = photos.filter(p => p.lat != null && p.lon != null);
     say(withGps.length
@@ -210,40 +210,40 @@ function loadPhotosOnMap() {
       : 'No hay fotografías con coordenadas GPS. Comprueba que contienen datos GPS EXIF.');
     return;
   }
- 
+
   pending.forEach(p => addPhotoMarker(p));
- 
+
   const located = photos.filter(p => p.marker);
- 
+
   if (located.length === 1) {
     map.setView([located[0].lat,located[0].lon],17);
   } else if (located.length > 1) {
     map.fitBounds(L.latLngBounds(located.map(p => [p.lat,p.lon])).pad(.15));
   }
- 
+
   say(`${pending.length} fotografía(s) cargada(s) en el mapa. ${located.length} fotografías con GPS.`);
 }
- 
+
 function refreshPhotos() {
- 
+
   $('photoCount').textContent = `${photos.length} fotografías`;
   $('geoCount').textContent =
     `${photos.filter(p => p.lat != null && p.lon != null).length} con GPS`;
- 
+
   $('photoList').innerHTML = '';
- 
+
   photos.forEach(p => {
- 
+
     const item = document.createElement('div');
     item.className = 'photo-item';
- 
+
     if (p.dataUrl) {
       const img = document.createElement('img');
       img.className = 'thumb';
       img.src = p.dataUrl;
       img.alt = p.name;
       img.title = p.name;
- 
+
       img.onclick = () => {
         if (p.lat != null && p.lon != null) {
           if (!p.marker) {
@@ -265,17 +265,17 @@ function refreshPhotos() {
       no.textContent = '📷';
       item.appendChild(no);
     }
- 
+
     const tag = document.createElement('div');
     tag.className = 'tag';
     tag.textContent = p.name;
     tag.title = p.name;
     item.appendChild(tag);
- 
+
     $('photoList').appendChild(item);
   });
 }
- 
+
 async function fileToDataUrl(file) {
   return new Promise((resolve,reject) => {
     const r = new FileReader();
@@ -284,12 +284,12 @@ async function fileToDataUrl(file) {
     r.readAsDataURL(file);
   });
 }
- 
- 
+
+
 // --------------------------------------------------
 // LECTURA ROBUSTA DE GPS EXIF
 // --------------------------------------------------
- 
+
 function toDecimal(v, ref) {
   if (v == null) return null;
   let d;
@@ -303,29 +303,29 @@ function toDecimal(v, ref) {
   if (/^[SW]/i.test(String(ref || ''))) d = -Math.abs(d);
   return d;
 }
- 
+
 function validCoords(lat, lon) {
   return Number.isFinite(lat) && Number.isFinite(lon) &&
     Math.abs(lat) <= 90 && Math.abs(lon) <= 180 &&
     !(lat === 0 && lon === 0);
 }
- 
+
 function formatDate(d) {
   if (!d) return '';
   if (d instanceof Date && !isNaN(d)) return d.toLocaleString('es-ES');
   return String(d);
 }
- 
+
 async function readPhotoMeta(file) {
- 
+
   if (typeof exifr === 'undefined') {
     throw new Error('La biblioteca EXIF (exifr) no se ha cargado. Revisa tu conexión a Internet.');
   }
- 
+
   const buf = await file.arrayBuffer();
- 
+
   let lat = null, lon = null, date = '';
- 
+
   try {
     const g = await exifr.gps(buf);
     if (validCoords(g?.latitude, g?.longitude)) {
@@ -335,7 +335,7 @@ async function readPhotoMeta(file) {
   } catch (err) {
     console.warn('exifr.gps falló:', file.name, err);
   }
- 
+
   let all = {};
   try {
     all = await exifr.parse(buf, {
@@ -344,11 +344,11 @@ async function readPhotoMeta(file) {
   } catch (err) {
     console.warn('exifr.parse falló:', file.name, err);
   }
- 
+
   if (lat == null || lon == null) {
     let la = Number(all.latitude);
     let lo = Number(all.longitude);
- 
+
     if (!validCoords(la, lo)) {
       la = toDecimal(all.GPSLatitude, all.GPSLatitudeRef);
       lo = toDecimal(all.GPSLongitude, all.GPSLongitudeRef);
@@ -358,37 +358,37 @@ async function readPhotoMeta(file) {
       lon = lo;
     }
   }
- 
+
   date = formatDate(all.DateTimeOriginal || all.CreateDate || all.ModifyDate);
- 
+
   return { lat, lon, date };
 }
- 
+
 $('photosInput').addEventListener('change',async e => {
- 
+
   const files = [...e.target.files];
   if (!files.length) return;
- 
+
   say(`Leyendo ${files.length} fotografía(s)…`);
- 
+
   let added = 0, errors = 0, noGps = 0, libError = '';
- 
+
   for (const file of files) {
     try {
       let meta = { lat:null, lon:null, date:'' };
- 
+
       try {
         meta = await readPhotoMeta(file);
       } catch (err) {
         console.warn('No se pudieron leer los EXIF:', file.name, err);
         if (/exifr/i.test(err.message)) libError = err.message;
       }
- 
+
       if (meta.lat == null) {
         noGps++;
         console.info('Sin GPS:', file.name);
       }
- 
+
       photos.push({
         name:file.name,
         type:file.type || 'image/jpeg',
@@ -398,18 +398,18 @@ $('photosInput').addEventListener('change',async e => {
         date:meta.date
       });
       added++;
- 
+
     } catch(err) {
       console.error(err);
       errors++;
     }
   }
- 
+
   refreshPhotos();
   loadPhotosOnMap();
- 
+
   let msg = `${added} fotografía(s) añadida(s). ${photos.filter(p => p.marker).length} situadas en el mapa.`;
- 
+
   if (noGps) {
     msg += ` ${noGps} sin datos GPS (si las elegiste desde la galería del móvil, ` +
            `el sistema suele eliminar el GPS: usa "Archivos" o la opción de ` +
@@ -417,49 +417,49 @@ $('photosInput').addEventListener('change',async e => {
   }
   if (errors) msg += ` ${errors} error(es) de lectura.`;
   if (libError) msg = libError;
- 
+
   say(msg);
   e.target.value = '';
 });
- 
+
 $('loadPhotos').addEventListener('click', loadPhotosOnMap);
- 
- 
+
+
 // --------------------------------------------------
 // CAPAS KML Y KMZ
 // --------------------------------------------------
- 
+
 function refreshLayers() {
- 
+
   const root = $('layerList');
   root.innerHTML = '';
- 
+
   if (!kmlLayers.length) {
     root.innerHTML = '<div class="empty">Todavía no hay capas KML.</div>';
     return;
   }
- 
+
   kmlLayers.forEach(layer => {
- 
+
     const row = document.createElement('div');
     row.className = 'layer';
- 
+
     const check = document.createElement('input');
     check.type = 'checkbox';
     check.checked = map.hasLayer(layer.leaflet);
     check.title = 'Mostrar u ocultar capa';
     check.onchange = () =>
       check.checked ? layer.leaflet.addTo(map) : map.removeLayer(layer.leaflet);
- 
+
     const sw = document.createElement('span');
     sw.className = 'swatch';
     sw.style.background = layer.color;
- 
+
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = layer.name;
     name.title = layer.name;
- 
+
     const zoom = document.createElement('button');
     zoom.textContent = 'Zoom';
     zoom.onclick = () => {
@@ -467,7 +467,7 @@ function refreshLayers() {
       if (b?.isValid()) map.fitBounds(b.pad(.12));
       else say('La capa no contiene geometrías visibles.');
     };
- 
+
     const del = document.createElement('button');
     del.textContent = '×';
     del.title = 'Eliminar capa';
@@ -476,34 +476,34 @@ function refreshLayers() {
       kmlLayers.splice(kmlLayers.indexOf(layer),1);
       refreshLayers();
     };
- 
+
     row.append(check,sw,name,zoom,del);
     root.appendChild(row);
   });
 }
- 
+
 function addKmlLayer(name, kmlText) {
- 
+
   const doc = new DOMParser().parseFromString(kmlText, 'text/xml');
- 
+
   if (doc.querySelector('parsererror')) {
     throw new Error('El archivo KML no se ha podido interpretar.');
   }
- 
+
   // El global correcto del build UMD es toGeoJSON (se acepta también el otro por si acaso)
   const converter = window.toGeoJSON || window.togeojson;
   if (!converter) {
     throw new Error('La biblioteca togeojson no se ha cargado. Revisa tu conexión.');
   }
- 
+
   const geo = converter.kml(doc);
- 
+
   if (!geo.features?.length) {
     throw new Error('El KML no contiene elementos geográficos compatibles.');
   }
- 
+
   const color = colors[colorIndex++ % colors.length];
- 
+
   // Usa el estilo del KML si existe; si no, el color de la capa
   const styleOf = f => {
     const p = f.properties || {};
@@ -516,18 +516,18 @@ function addKmlLayer(name, kmlText) {
       fillOpacity: p['fill-opacity'] != null ? Number(p['fill-opacity']) : .25
     };
   };
- 
+
   const hidden = new Set([
     'name','styleUrl','stroke','stroke-opacity','stroke-width',
     'fill','fill-opacity','icon','icon-scale','icon-offset',
     'icon-offset-units','label-color','label-scale','visibility',
     'description','timestamp','begin','end'
   ]);
- 
+
   const leaflet = L.geoJSON(geo, {
- 
+
     style: styleOf,
- 
+
     pointToLayer: (f, latlng) => {
       const p = f.properties || {};
       const c = p['marker-color'] || p.stroke || color;
@@ -535,12 +535,12 @@ function addKmlLayer(name, kmlText) {
         radius:7, color:c, fillColor:c, fillOpacity:.9, weight:2
       });
     },
- 
+
     onEachFeature: (f, l) => {
- 
+
       const props = f.properties || {};
       const title = props.name || props.title || 'Elemento KML';
- 
+
       // description puede venir con HTML: se sanea antes de mostrarla
       let desc = '';
       if (props.description) {
@@ -555,48 +555,48 @@ function addKmlLayer(name, kmlText) {
         });
         desc = `<div>${d.body.innerHTML}</div>`;
       }
- 
+
       const details = Object.entries(props)
         .filter(([k, v]) =>
           !hidden.has(k) && v != null && String(v).trim() && typeof v !== 'object')
         .slice(0, 12)
         .map(([k, v]) => `<div><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`)
         .join('');
- 
+
       l.bindPopup(`<b>${escapeHtml(title)}</b>${desc}${details}`, { maxWidth:320 });
     }
- 
+
   }).addTo(map);
- 
+
   kmlLayers.push({ name, kmlText, color, leaflet });
- 
+
   refreshLayers();
- 
+
   const bounds = leaflet.getBounds();
   if (bounds.isValid()) map.fitBounds(bounds.pad(.12));
 }
- 
+
 async function readKmlFile(file) {
- 
+
   if (file.name.toLowerCase().endsWith('.kmz')) {
- 
+
     const zip = await JSZip.loadAsync(file);
- 
+
     const entries = Object.values(zip.files)
       .filter(f => !f.dir && f.name.toLowerCase().endsWith('.kml'));
- 
+
     if (!entries.length) throw new Error('El KMZ no contiene ningún KML.');
- 
+
     const entry = entries.find(f => f.name.toLowerCase() === 'doc.kml') || entries[0];
- 
+
     return await entry.async('text');
   }
- 
+
   return await file.text();
 }
- 
+
 $('kmlInput').addEventListener('change',async e => {
- 
+
   for (const file of [...e.target.files]) {
     try {
       const text = await readKmlFile(file);
@@ -607,15 +607,15 @@ $('kmlInput').addEventListener('change',async e => {
       say(`${file.name}: ${err.message || 'error al importar'}`);
     }
   }
- 
+
   e.target.value = '';
 });
- 
- 
+
+
 // --------------------------------------------------
 // MAPA BASE
 // --------------------------------------------------
- 
+
 document.querySelectorAll('input[name="basemap"]').forEach(r => {
   r.addEventListener('change',() => {
     if (r.checked) {
@@ -625,12 +625,12 @@ document.querySelectorAll('input[name="basemap"]').forEach(r => {
     }
   });
 });
- 
- 
+
+
 // --------------------------------------------------
 // DESCARGAS
 // --------------------------------------------------
- 
+
 function downloadBlob(blob,name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -639,14 +639,14 @@ function downloadBlob(blob,name) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url),1500);
 }
- 
- 
+
+
 // --------------------------------------------------
 // GUARDAR PROYECTO
 // --------------------------------------------------
- 
+
 $('saveProject').onclick = () => {
- 
+
   const project = {
     format:'GeoPhotoExplorer',
     version:1,
@@ -656,47 +656,47 @@ $('saveProject').onclick = () => {
     basemap:document.querySelector('input[name="basemap"]:checked')?.value || 'osm',
     view:{center:map.getCenter(), zoom:map.getZoom()}
   };
- 
+
   downloadBlob(
     new Blob([JSON.stringify(project)],{type:'application/json'}),
     'geophoto-proyecto.json'
   );
- 
+
   say('Proyecto preparado para guardar.');
 };
- 
- 
+
+
 // --------------------------------------------------
 // ABRIR PROYECTO
 // --------------------------------------------------
- 
+
 $('projectInput').onchange = async e => {
- 
+
   const file = e.target.files[0];
   if (!file) return;
- 
+
   try {
- 
+
     const p = JSON.parse(await file.text());
- 
+
     if (p.format !== 'GeoPhotoExplorer') {
       throw new Error('El archivo no parece un proyecto GeoPhoto Explorer.');
     }
- 
+
     photos.splice(0);
     photoLayer.clearLayers();
- 
+
     (p.photos || []).forEach(photo => {
       const cleanPhoto = {...photo};
       delete cleanPhoto.marker;
       photos.push(cleanPhoto);
       addPhotoMarker(cleanPhoto);
     });
- 
+
     kmlLayers.forEach(l => map.removeLayer(l.leaflet));
     kmlLayers.splice(0);
     colorIndex = 0;
- 
+
     (p.layers || []).forEach(l => {
       try {
         addKmlLayer(l.name,l.kmlText);
@@ -704,18 +704,18 @@ $('projectInput').onchange = async e => {
         console.warn(err);
       }
     });
- 
+
     refreshPhotos();
     refreshLayers();
- 
+
     const base = p.basemap === 'sat' ? 'sat' : 'osm';
- 
+
     document.querySelector(`input[name="basemap"][value="${base}"]`).checked = true;
- 
+
     map.removeLayer(osm);
     map.removeLayer(sat);
     (base === 'sat' ? sat : osm).addTo(map);
- 
+
     if (p.view?.center) {
       map.setView([p.view.center.lat,p.view.center.lng], p.view.zoom || 10);
     } else {
@@ -724,47 +724,47 @@ $('projectInput').onchange = async e => {
         map.fitBounds(L.latLngBounds(pts.map(x => [x.lat,x.lon])).pad(.15));
       }
     }
- 
+
     say('Proyecto abierto correctamente.');
- 
+
   } catch(err) {
     say(`No se pudo abrir el proyecto: ${err.message}`);
   }
- 
+
   e.target.value = '';
 };
- 
- 
+
+
 // --------------------------------------------------
 // EXPORTAR FOTOGRAFÍAS A KMZ
 // --------------------------------------------------
- 
+
 $('exportKmz').onclick = async () => {
- 
+
   const located = photos.filter(p => p.lat != null && p.lon != null);
- 
+
   if (!located.length) {
     say('No hay fotografías con GPS para exportar.');
     return;
   }
- 
+
   try {
- 
+
     const zip = new JSZip();
- 
+
     const placemarks = located.map((p,i) => {
- 
+
       const ext = (p.name.match(/\.([a-z0-9]+)$/i) || [])[1] || 'jpg';
       const safe = `images/photo_${i+1}.${ext}`;
       const base64 = p.dataUrl?.split(',')[1];
- 
+
       if (base64) zip.file(safe,base64,{base64:true});
- 
+
       const desc =
         `<div><b>${escapeHtml(p.name)}</b><br>` +
         `${p.date ? `Fecha: ${escapeHtml(p.date)}<br>` : ''}` +
         `<img src="${safe}" width="420"></div>`;
- 
+
       return `
         <Placemark>
           <name>${escapeHtml(p.name)}</name>
@@ -775,7 +775,7 @@ $('exportKmz').onclick = async () => {
         </Placemark>
       `;
     }).join('');
- 
+
     const kml = `<?xml version="1.0" encoding="UTF-8"?>
       <kml xmlns="http://www.opengis.net/kml/2.2">
         <Document>
@@ -783,53 +783,52 @@ $('exportKmz').onclick = async () => {
           ${placemarks}
         </Document>
       </kml>`;
- 
+
     zip.file('doc.kml',kml);
- 
+
     const blob = await zip.generateAsync({type:'blob',compression:'DEFLATE'});
- 
+
     downloadBlob(blob,'fotografias-georreferenciadas.kmz');
- 
+
     say('KMZ creado. Incluye las imágenes y sus ubicaciones.');
- 
+
   } catch(err) {
     console.error(err);
     say('No se pudo generar el KMZ: ' + err.message);
   }
 };
- 
- 
+
+
 // --------------------------------------------------
 // LIMPIAR TODO
 // --------------------------------------------------
- 
+
 $('clearAll').onclick = () => {
- 
+
   if (!confirm('¿Eliminar todas las fotografías y capas del proyecto actual?')) return;
- 
+
   photos.splice(0);
   photoLayer.clearLayers();
- 
+
   kmlLayers.forEach(l => map.removeLayer(l.leaflet));
   kmlLayers.splice(0);
- 
+
   refreshPhotos();
   refreshLayers();
- 
+
   say('Proyecto vacío.');
 };
- 
- 
+
+
 // --------------------------------------------------
 // INICIO
 // --------------------------------------------------
- 
+
 refreshPhotos();
 refreshLayers();
- 
+
 })();
 </script>
- 
+
 </body>
 </html>
- 
