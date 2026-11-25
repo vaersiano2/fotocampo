@@ -43,6 +43,8 @@ input[type=file]{display:none}
 .popup-title{font-weight:650;margin:5px 0}
 .popup-meta{font-size:12px;color:#526170}
 .empty{font-size:12px;color:#8492a0;padding:6px 0}
+.cam-icon{background:none;border:0}
+.cam-icon span{display:grid;place-items:center;width:34px;height:34px;font-size:20px;background:#fff;border:2px solid var(--accent);border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 @media(max-width:760px){
   .app{grid-template-columns:1fr;grid-template-rows:44vh 1fr;height:auto;min-height:calc(100vh - 58px)}
   #map{grid-row:1;min-height:44vh}
@@ -191,7 +193,15 @@ function addPhotoMarker(p) {
       !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
   if (p.marker) return;
 
-  const marker = L.marker([p.lat,p.lon]).bindPopup(() => photoPopup(p),{maxWidth:300});
+  const camIcon = L.divIcon({
+    className:'cam-icon',
+    html:'<span>📷</span>',
+    iconSize:[34,34],
+    iconAnchor:[17,17],
+    popupAnchor:[0,-18]
+  });
+
+  const marker = L.marker([p.lat,p.lon],{icon:camIcon}).bindPopup(() => photoPopup(p),{maxWidth:300});
   p.marker = marker;
   marker.addTo(photoLayer);
 }
